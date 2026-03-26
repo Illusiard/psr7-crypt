@@ -3,10 +3,11 @@
 namespace Illusiard\Psr7Crypt\Service;
 
 use Illusiard\Psr7Crypt\Exception\SidecarNotReadyException;
+use Illusiard\Psr7Crypt\ValueObject\Sidecar;
 
 final class SidecarAccumulator
 {
-    public const int CHUNK_SIZE       = 65536;
+    public const int CHUNK_SIZE           = 65536;
     public const int OVERLAP_SIZE         = 16;
     public const int TRUNCATED_MAC_LENGTH = 10;
 
@@ -62,13 +63,13 @@ final class SidecarAccumulator
         $this->isFinalized = true;
     }
 
-    public function getSidecar(): string
+    public function getSidecar(): Sidecar
     {
         if (!$this->isFinalized) {
             throw SidecarNotReadyException::create();
         }
 
-        return $this->sidecar;
+        return new Sidecar($this->sidecar);
     }
 
     private function createChunkSignature(string $chunk): string

@@ -14,48 +14,53 @@ final class EncryptedStreamTest extends TestCase
 {
     #[DataProvider('sampleProvider')]
     public function testItMatchesProvidedEncryptedSamples(
-        string $sampleName,
+        string    $sampleName,
         MediaType $mediaType,
-        bool $shouldGenerateSidecar
-    ): void {
-        $keyExpander = new KeyExpander();
+        ?string   $expectedSidecarHex
+    ): void
+    {
+        $keyExpander      = new KeyExpander();
         $expandedMediaKey = $keyExpander->expand(
             new MediaKey(file_get_contents($this->getSamplePath($sampleName . '.key'))),
             $mediaType
         );
 
-        $plainStream = Utils::streamFor(fopen($this->getSamplePath($sampleName . '.original'), 'rb'));
-        $encryptedStream = new EncryptedStream($plainStream, $expandedMediaKey, $shouldGenerateSidecar, 7777);
+        $plainStream      = Utils::streamFor(fopen($this->getSamplePath($sampleName . '.original'), 'rb'));
+        $encryptedStream  = new EncryptedStream($plainStream, $expandedMediaKey, $mediaType->supportsSidecar(), 7777);
         $encryptedPayload = '';
+
+        self::assertSame($mediaType->supportsSidecar(), $encryptedStream->hasSidecar());
+        self::assertFalse($encryptedStream->isSidecarReady());
 
         while (!$encryptedStream->eof()) {
             $encryptedPayload .= $encryptedStream->read(4093);
         }
 
-        self::assertSame(
-            file_get_contents($this->getSamplePath($sampleName . '.encrypted')),
-            $encryptedPayload
+        self::assertStringEqualsFile(
+            $this->getSamplePath($sampleName . '.encrypted'), $encryptedPayload
         );
 
-        if ($shouldGenerateSidecar) {
+        if ($expectedSidecarHex !== null) {
             self::assertSame(
-                file_get_contents($this->getSamplePath($sampleName . '.sidecar')),
-                $encryptedStream->getSidecar()
+                hex2bin($expectedSidecarHex),
+                $encryptedStream->getSidecar()?->getValue()
             );
+            self::assertTrue($encryptedStream->isSidecarReady());
         } else {
             self::assertNull($encryptedStream->getSidecar());
+            self::assertFalse($encryptedStream->isSidecarReady());
         }
     }
 
     public function testReadByPartsAndEofBehaveCorrectly(): void
     {
-        $keyExpander = new KeyExpander();
+        $keyExpander      = new KeyExpander();
         $expandedMediaKey = $keyExpander->expand(
             new MediaKey(file_get_contents($this->getSamplePath('IMAGE.key'))),
             MediaType::Image
         );
 
-        $plainStream = Utils::streamFor(fopen($this->getSamplePath('IMAGE.original'), 'rb'));
+        $plainStream     = Utils::streamFor(fopen($this->getSamplePath('IMAGE.original'), 'rb'));
         $encryptedStream = new EncryptedStream($plainStream, $expandedMediaKey, false, 1024);
 
         self::assertFalse($encryptedStream->eof());
@@ -78,18 +83,17 @@ final class EncryptedStreamTest extends TestCase
         }
 
         self::assertTrue($encryptedStream->eof());
-        self::assertSame(
-            file_get_contents($this->getSamplePath('IMAGE.encrypted')),
-            $result
+        self::assertStringEqualsFile(
+            $this->getSamplePath('IMAGE.encrypted'), $result
         );
     }
 
     public static function sampleProvider(): array
     {
         return [
-            'image' => ['IMAGE', MediaType::Image, false],
-            'audio' => ['AUDIO', MediaType::Audio, false],
-            'video' => ['VIDEO', MediaType::Video, true],
+            'image' => ['IMAGE', MediaType::Image, null],
+            'audio' => ['AUDIO', MediaType::Audio, 'eca87e7d15118624dc2e'],
+            'video' => ['VIDEO', MediaType::Video, '6466a24d1834fd11975ff59032e27243eb7ffa7af32b12de91dd93903c14fb9335a13a26fbfec938501f04e81292732d0fc181d428d2829b3817d6f453ea3f91e699face1703'],
         ];
     }
 

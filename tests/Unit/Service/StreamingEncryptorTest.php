@@ -8,6 +8,7 @@ use Illusiard\Psr7Crypt\Service\StreamingEncryptor;
 use Illusiard\Psr7Crypt\ValueObject\ExpandedMediaKey;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use Random\RandomException;
 
 final class StreamingEncryptorTest extends TestCase
 {
@@ -86,12 +87,17 @@ final class StreamingEncryptorTest extends TestCase
 
         $encryptor->finalize();
 
-        self::assertSame(
-            file_get_contents(__DIR__ . '/../../../task/samples/VIDEO.sidecar'),
-            $encryptor->getSidecar()
+        self::assertStringEqualsFile(
+            __DIR__ . '/../../../task/samples/VIDEO.sidecar', $encryptor->getSidecar()?->getValue()
         );
+        self::assertTrue($encryptor->hasSidecar());
+        self::assertTrue($encryptor->isSidecarReady());
     }
 
+    /**
+     * @return void
+     * @throws RandomException
+     */
     public function testItFailsWhenSidecarIsRequestedBeforeFinalization(): void
     {
         $expandedMediaKey = new ExpandedMediaKey(random_bytes(ExpandedMediaKey::LENGTH));
@@ -105,6 +111,19 @@ final class StreamingEncryptorTest extends TestCase
 
         $this->expectException(SidecarNotReadyException::class);
         $encryptor->getSidecar();
+    }
+
+    /**
+     * @return void
+     * @throws RandomException
+     */
+    public function testItExposesDisabledSidecarStateExplicitly(): void
+    {
+        $encryptor = new StreamingEncryptor(new ExpandedMediaKey(random_bytes(ExpandedMediaKey::LENGTH)));
+
+        self::assertFalse($encryptor->hasSidecar());
+        self::assertFalse($encryptor->isSidecarReady());
+        self::assertNull($encryptor->getSidecar());
     }
 
     public static function plaintextProvider(): array

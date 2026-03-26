@@ -7,6 +7,7 @@ use Illusiard\Psr7Crypt\Exception\StreamOperationException;
 use Illusiard\Psr7Crypt\Service\SidecarAccumulator;
 use Illusiard\Psr7Crypt\Service\StreamingEncryptor;
 use Illusiard\Psr7Crypt\ValueObject\ExpandedMediaKey;
+use Illusiard\Psr7Crypt\ValueObject\Sidecar;
 use Psr\Http\Message\StreamInterface;
 use Throwable;
 
@@ -154,7 +155,17 @@ final class EncryptedStream implements StreamInterface
         return $this->stream->getMetadata($key);
     }
 
-    public function getSidecar(): ?string
+    public function hasSidecar(): bool
+    {
+        return $this->streamingEncryptor->hasSidecar();
+    }
+
+    public function isSidecarReady(): bool
+    {
+        return $this->streamingEncryptor->isSidecarReady();
+    }
+
+    public function getSidecar(): ?Sidecar
     {
         return $this->streamingEncryptor->getSidecar();
     }

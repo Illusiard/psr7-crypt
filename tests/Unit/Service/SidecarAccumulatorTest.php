@@ -48,7 +48,11 @@ final class SidecarAccumulatorTest extends TestCase
 
         $accumulator->finalize($videoMac);
 
-        self::assertStringEqualsFile(__DIR__ . '/../../../task/samples/VIDEO.sidecar', $accumulator->getSidecar());
+        self::assertStringEqualsFile(
+            __DIR__ . '/../../../task/samples/VIDEO.sidecar',
+            $accumulator->getSidecar()->getValue()
+        );
+        self::assertSame(7, $accumulator->getSidecar()->getChunkCount());
     }
 
     /**

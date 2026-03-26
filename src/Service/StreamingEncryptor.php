@@ -6,6 +6,7 @@ use HashContext;
 use Illusiard\Psr7Crypt\Exception\EncryptionException;
 use Illusiard\Psr7Crypt\Exception\SidecarNotReadyException;
 use Illusiard\Psr7Crypt\ValueObject\ExpandedMediaKey;
+use Illusiard\Psr7Crypt\ValueObject\Sidecar;
 
 final class StreamingEncryptor
 {
@@ -16,8 +17,7 @@ final class StreamingEncryptor
 
     private string $currentIv;
 
-    private bool $isFinalized
-        = false {
+    private bool $isFinalized = false {
             get {
                 return $this->isFinalized;
             }
@@ -80,7 +80,17 @@ final class StreamingEncryptor
         return $ciphertext . $mac;
     }
 
-    public function getSidecar(): ?string
+    public function hasSidecar(): bool
+    {
+        return $this->sidecarAccumulator !== null;
+    }
+
+    public function isSidecarReady(): bool
+    {
+        return (bool)$this->sidecarAccumulator;
+    }
+
+    public function getSidecar(): ?Sidecar
     {
         if ($this->sidecarAccumulator === null) {
             return null;
