@@ -1,6 +1,13 @@
 {
     "name": "illusiard/psr7-crypt",
     "description": "PSR-7 stream decorators for WhatsApp-compatible media encryption and decryption.",
+    "keywords": [
+        "psr-7",
+        "stream",
+        "encryption",
+        "whatsapp",
+        "sidecar"
+    ],
     "type": "library",
     "license": "MIT",
     "require": {
