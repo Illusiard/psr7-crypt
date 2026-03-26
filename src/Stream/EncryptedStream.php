@@ -26,10 +26,7 @@ final class EncryptedStream extends BaseStream
         $sidecarAccumulator = null;
 
         if ($shouldGenerateSidecar) {
-            $sidecarAccumulator = new SidecarAccumulator(
-                $expandedMediaKey->getMacKey(),
-                $expandedMediaKey->getIv()
-            );
+            $sidecarAccumulator = new SidecarAccumulator($expandedMediaKey->getMacKey());
         }
 
         $this->streamingEncryptor = new StreamingEncryptor($expandedMediaKey, $sidecarAccumulator);

@@ -22,37 +22,31 @@ final class SidecarAccumulator
     }
 
     public function __construct(
-        private readonly string $macKey,
-        string                  $initialData = ''
+        private readonly string $macKey
     )
     {
-        $this->buffer = $initialData;
+        $this->buffer = '';
+    }
+
+    public function appendInitializationVector(string $initializationVector): void
+    {
+        $this->appendSidecarInput($initializationVector);
     }
 
     public function appendCiphertext(string $ciphertext): void
     {
-        if ($this->isFinalized || $ciphertext === '') {
-            return;
-        }
-
-        $this->buffer .= $ciphertext;
-
-        while (strlen($this->buffer) >= self::CHUNK_SIZE + self::OVERLAP_SIZE) {
-            $chunk = substr($this->buffer, 0, self::CHUNK_SIZE + self::OVERLAP_SIZE);
-
-            $this->sidecar .= $this->createChunkSignature($chunk);
-            $this->buffer  = substr($this->buffer, self::CHUNK_SIZE);
-        }
+        $this->appendSidecarInput($ciphertext);
     }
 
-    public function finalize(string $trailingData = ''): void
+    public function appendMessageAuthenticationCode(string $messageAuthenticationCode): void
+    {
+        $this->appendSidecarInput($messageAuthenticationCode);
+    }
+
+    public function finalize(): void
     {
         if ($this->isFinalized) {
             return;
-        }
-
-        if ($trailingData !== '') {
-            $this->buffer .= $trailingData;
         }
 
         if ($this->buffer !== '') {
@@ -70,6 +64,22 @@ final class SidecarAccumulator
         }
 
         return new Sidecar($this->sidecar);
+    }
+
+    private function appendSidecarInput(string $sidecarInput): void
+    {
+        if ($this->isFinalized || $sidecarInput === '') {
+            return;
+        }
+
+        $this->buffer .= $sidecarInput;
+
+        while (strlen($this->buffer) >= self::CHUNK_SIZE + self::OVERLAP_SIZE) {
+            $chunk = substr($this->buffer, 0, self::CHUNK_SIZE + self::OVERLAP_SIZE);
+
+            $this->sidecar .= $this->createChunkSignature($chunk);
+            $this->buffer  = substr($this->buffer, self::CHUNK_SIZE);
+        }
     }
 
     private function createChunkSignature(string $chunk): string

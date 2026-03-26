@@ -62,10 +62,7 @@ final class StreamingEncryptorTest extends TestCase
             )
         );
 
-        $sidecarAccumulator = new SidecarAccumulator(
-            $expandedMediaKey->getMacKey(),
-            $expandedMediaKey->getIv()
-        );
+        $sidecarAccumulator = new SidecarAccumulator($expandedMediaKey->getMacKey());
         $encryptor = new StreamingEncryptor($expandedMediaKey, $sidecarAccumulator);
         $plaintext = file_get_contents(__DIR__ . '/../../../task/samples/VIDEO.original');
         $offset = 0;
@@ -101,10 +98,7 @@ final class StreamingEncryptorTest extends TestCase
     public function testItFailsWhenSidecarIsRequestedBeforeFinalization(): void
     {
         $expandedMediaKey = new ExpandedMediaKey(random_bytes(ExpandedMediaKey::LENGTH));
-        $sidecarAccumulator = new SidecarAccumulator(
-            $expandedMediaKey->getMacKey(),
-            $expandedMediaKey->getIv()
-        );
+        $sidecarAccumulator = new SidecarAccumulator($expandedMediaKey->getMacKey());
         $encryptor = new StreamingEncryptor($expandedMediaKey, $sidecarAccumulator);
 
         $encryptor->appendPlaintext('not-final-yet');

@@ -28,7 +28,8 @@ final class SidecarAccumulatorTest extends TestCase
         $iv               = substr($expandedMediaKey, 0, 16);
         $macKey           = substr($expandedMediaKey, 48, 32);
 
-        $accumulator = new SidecarAccumulator($macKey, $iv);
+        $accumulator = new SidecarAccumulator($macKey);
+        $accumulator->appendInitializationVector($iv);
         $offset      = 0;
 
         foreach ([13, 4096, 65535, 8192, 120000, 200000] as $chunkLength) {
@@ -46,7 +47,8 @@ final class SidecarAccumulatorTest extends TestCase
             $accumulator->appendCiphertext(substr($videoCiphertext, $offset));
         }
 
-        $accumulator->finalize($videoMac);
+        $accumulator->appendMessageAuthenticationCode($videoMac);
+        $accumulator->finalize();
 
         self::assertStringEqualsFile(
             __DIR__ . '/../../../task/samples/VIDEO.sidecar',

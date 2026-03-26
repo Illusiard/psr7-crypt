@@ -33,6 +33,8 @@ final class StreamingEncryptor
         $this->currentIv  = $this->expandedMediaKey->getIv();
         $this->macContext = hash_init('sha256', HASH_HMAC, $this->expandedMediaKey->getMacKey());
         hash_update($this->macContext, $this->expandedMediaKey->getIv());
+
+        $this->sidecarAccumulator?->appendInitializationVector($this->expandedMediaKey->getIv());
     }
 
     public function appendPlaintext(string $plaintext): string
@@ -74,7 +76,8 @@ final class StreamingEncryptor
         $this->isFinalized = true;
 
         if ($this->sidecarAccumulator !== null) {
-            $this->sidecarAccumulator->finalize($mac);
+            $this->sidecarAccumulator->appendMessageAuthenticationCode($mac);
+            $this->sidecarAccumulator->finalize();
         }
 
         return $ciphertext . $mac;
@@ -96,7 +99,7 @@ final class StreamingEncryptor
             return null;
         }
 
-        if (!$this->sidecarAccumulator) {
+        if (!$this->sidecarAccumulator->isFinalized) {
             throw SidecarNotReadyException::create();
         }
 
