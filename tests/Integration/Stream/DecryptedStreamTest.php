@@ -65,7 +65,7 @@ final class DecryptedStreamTest extends TestCase
         $decryptedStream  = new DecryptedStream($encryptedStream, $expandedMediaKey, 1024);
 
         $this->expectException(InvalidMacException::class);
-        $decryptedStream->read(1);
+        $decryptedStream->getContents();
     }
 
     public function testReadByPartsAndEofBehaveCorrectly(): void
@@ -100,6 +100,27 @@ final class DecryptedStreamTest extends TestCase
 
         self::assertTrue($decryptedStream->eof());
         self::assertStringEqualsFile($this->getSamplePath('AUDIO.original'), $plaintext);
+    }
+
+    public function testItStreamsPlaintextBeforeEncryptedSourceReachesEof(): void
+    {
+        $keyExpander      = new KeyExpander();
+        $expandedMediaKey = $keyExpander->expand(
+            new MediaKey(file_get_contents($this->getSamplePath('VIDEO.key'))),
+            MediaType::Video
+        );
+
+        $encryptedPayload       = file_get_contents($this->getSamplePath('VIDEO.encrypted'));
+        $partialEncryptedStream = Utils::streamFor(substr($encryptedPayload, 0, -10));
+        $decryptedStream        = new DecryptedStream($partialEncryptedStream, $expandedMediaKey, 8192);
+
+        $firstChunk = $decryptedStream->read(1024);
+
+        self::assertNotSame('', $firstChunk);
+        self::assertSame(
+            substr(file_get_contents($this->getSamplePath('VIDEO.original')), 0, 1024),
+            $firstChunk
+        );
     }
 
     public static function sampleProvider(): array

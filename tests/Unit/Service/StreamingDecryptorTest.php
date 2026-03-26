@@ -25,12 +25,12 @@ final class StreamingDecryptorTest extends TestCase
             )
         );
 
-        $encryptor = new StreamingEncryptor($expandedMediaKey);
+        $encryptor        = new StreamingEncryptor($expandedMediaKey);
         $encryptedPayload = $encryptor->appendPlaintext($plaintext) . $encryptor->finalize();
 
-        $decryptor = new StreamingDecryptor($expandedMediaKey);
+        $decryptor        = new StreamingDecryptor($expandedMediaKey);
         $decryptedPayload = '';
-        $offset = 0;
+        $offset           = 0;
 
         foreach ([1, 2, 5, 8, 13, 21, 34] as $chunkLength) {
             $chunk = substr($encryptedPayload, $offset, $chunkLength);
@@ -40,7 +40,7 @@ final class StreamingDecryptorTest extends TestCase
             }
 
             $decryptedPayload .= $decryptor->appendEncryptedData($chunk);
-            $offset += strlen($chunk);
+            $offset           += strlen($chunk);
         }
 
         if ($offset < strlen($encryptedPayload)) {
@@ -59,9 +59,9 @@ final class StreamingDecryptorTest extends TestCase
     public function testItRejectsInvalidMac(): void
     {
         $expandedMediaKey = new ExpandedMediaKey(random_bytes(ExpandedMediaKey::LENGTH));
-        $encryptor = new StreamingEncryptor($expandedMediaKey);
+        $encryptor        = new StreamingEncryptor($expandedMediaKey);
         $encryptedPayload = $encryptor->appendPlaintext('payload') . $encryptor->finalize();
-        $tamperedPayload = substr($encryptedPayload, 0, -1) . ($encryptedPayload[-1] ^ "\xff");
+        $tamperedPayload  = substr($encryptedPayload, 0, -1) . ($encryptedPayload[-1] ^ "\xff");
 
         $decryptor = new StreamingDecryptor($expandedMediaKey);
         $decryptor->appendEncryptedData($tamperedPayload);
@@ -83,12 +83,29 @@ final class StreamingDecryptorTest extends TestCase
         $decryptor->finalize();
     }
 
+    public function testItReleasesConfirmedPlaintextBeforeFinalization(): void
+    {
+        $expandedMediaKey = new ExpandedMediaKey(random_bytes(ExpandedMediaKey::LENGTH));
+        $plaintext        = str_repeat('A', 96);
+
+        $encryptor        = new StreamingEncryptor($expandedMediaKey);
+        $encryptedPayload = $encryptor->appendPlaintext($plaintext) . $encryptor->finalize();
+
+        $decryptor         = new StreamingDecryptor($expandedMediaKey);
+        $releasedPlaintext = $decryptor->appendEncryptedData(substr($encryptedPayload, 0, -26));
+        $releasedPlaintext .= $decryptor->appendEncryptedData(substr($encryptedPayload, -26));
+        $releasedPlaintext .= $decryptor->finalize();
+
+        self::assertNotSame('', $releasedPlaintext);
+        self::assertSame($plaintext, $releasedPlaintext);
+    }
+
     public static function plaintextProvider(): array
     {
         return [
-            'empty' => [''],
-            'short' => ['hello'],
-            'exact block' => ['1234567890abcdef'],
+            'empty'           => [''],
+            'short'           => ['hello'],
+            'exact block'     => ['1234567890abcdef'],
             'multiple blocks' => ['The quick brown fox jumps over the lazy dog twice.'],
         ];
     }

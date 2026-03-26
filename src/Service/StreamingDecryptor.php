@@ -16,6 +16,8 @@ final class StreamingDecryptor
 
     private string $encryptedBuffer = '';
 
+    private string $pendingPlaintext = '';
+
     private string $currentIv;
 
     private bool $isFinalized = false {
@@ -28,8 +30,9 @@ final class StreamingDecryptor
 
     public function __construct(
         private readonly ExpandedMediaKey $expandedMediaKey
-    ) {
-        $this->currentIv = $this->expandedMediaKey->getIv();
+    )
+    {
+        $this->currentIv  = $this->expandedMediaKey->getIv();
         $this->macContext = hash_init('sha256', HASH_HMAC, $this->expandedMediaKey->getMacKey());
         hash_update($this->macContext, $this->expandedMediaKey->getIv());
     }
@@ -41,16 +44,16 @@ final class StreamingDecryptor
         }
 
         $this->encryptedBuffer .= $encryptedData;
-        $processableLength = $this->getProcessableCiphertextLength();
+        $processableLength     = $this->getProcessableCiphertextLength();
 
         if ($processableLength === 0) {
             return '';
         }
 
-        $ciphertext = substr($this->encryptedBuffer, 0, $processableLength);
+        $ciphertext            = substr($this->encryptedBuffer, 0, $processableLength);
         $this->encryptedBuffer = substr($this->encryptedBuffer, $processableLength);
 
-        return $this->decryptCiphertextChunk($ciphertext);
+        return $this->bufferReleasedPlaintext($this->decryptCiphertextChunk($ciphertext));
     }
 
     public function finalize(): string
@@ -63,7 +66,7 @@ final class StreamingDecryptor
             throw InvalidEncryptedPayloadException::forInsufficientLength();
         }
 
-        $ciphertext = substr($this->encryptedBuffer, 0, -self::TRUNCATED_MAC_LENGTH);
+        $ciphertext  = substr($this->encryptedBuffer, 0, -self::TRUNCATED_MAC_LENGTH);
         $providedMac = substr($this->encryptedBuffer, -self::TRUNCATED_MAC_LENGTH);
 
         if ($ciphertext === '' || strlen($ciphertext) % self::BLOCK_SIZE !== 0) {
@@ -78,10 +81,13 @@ final class StreamingDecryptor
         }
 
         $decryptedFinalChunk = $this->decryptCiphertextChunkWithoutMacUpdate($ciphertext);
-        $this->isFinalized = true;
-        $this->encryptedBuffer = '';
+        $finalPlaintext      = $this->pendingPlaintext . $decryptedFinalChunk;
 
-        return $this->removePadding($decryptedFinalChunk);
+        $this->isFinalized      = true;
+        $this->encryptedBuffer  = '';
+        $this->pendingPlaintext = '';
+
+        return $this->removePadding($finalPlaintext);
     }
 
     private function getProcessableCiphertextLength(): int
@@ -119,6 +125,27 @@ final class StreamingDecryptor
         $this->currentIv = substr($ciphertext, -self::BLOCK_SIZE);
 
         return $plaintext;
+    }
+
+    private function bufferReleasedPlaintext(string $plaintext): string
+    {
+        if ($plaintext === '') {
+            return '';
+        }
+
+        $combinedPlaintext = $this->pendingPlaintext . $plaintext;
+
+        if (strlen($combinedPlaintext) <= self::BLOCK_SIZE) {
+            $this->pendingPlaintext = $combinedPlaintext;
+
+            return '';
+        }
+
+        $releaseLength          = strlen($combinedPlaintext) - self::BLOCK_SIZE;
+        $releasedPlaintext      = substr($combinedPlaintext, 0, $releaseLength);
+        $this->pendingPlaintext = substr($combinedPlaintext, $releaseLength);
+
+        return $releasedPlaintext;
     }
 
     private function removePadding(string $plaintext): string

@@ -9,25 +9,20 @@ use Illusiard\Psr7Crypt\Service\StreamingEncryptor;
 use Illusiard\Psr7Crypt\ValueObject\ExpandedMediaKey;
 use Illusiard\Psr7Crypt\ValueObject\Sidecar;
 use Psr\Http\Message\StreamInterface;
-use Throwable;
 
-final class EncryptedStream implements StreamInterface
+final class EncryptedStream extends BaseStream
 {
-    private string $outputBuffer = '';
-
-    private int $position = 0;
-
-    private bool $isCompleted = false;
-
     private readonly StreamingEncryptor $streamingEncryptor;
 
     public function __construct(
-        private readonly StreamInterface $stream,
-        ExpandedMediaKey                 $expandedMediaKey,
-        bool                             $shouldGenerateSidecar = false,
-        private readonly int             $sourceReadSize = 8192
+        StreamInterface  $stream,
+        ExpandedMediaKey $expandedMediaKey,
+        bool             $shouldGenerateSidecar = false,
+        int              $sourceReadSize = 8192
     )
     {
+        parent::__construct($stream, $expandedMediaKey, $sourceReadSize);
+
         $sidecarAccumulator = null;
 
         if ($shouldGenerateSidecar) {
@@ -38,25 +33,6 @@ final class EncryptedStream implements StreamInterface
         }
 
         $this->streamingEncryptor = new StreamingEncryptor($expandedMediaKey, $sidecarAccumulator);
-    }
-
-    public function __toString(): string
-    {
-        try {
-            return $this->getContents();
-        } catch (Throwable) {
-            return '';
-        }
-    }
-
-    public function close(): void
-    {
-        $this->stream->close();
-    }
-
-    public function detach()
-    {
-        return $this->stream->detach();
     }
 
     public function getSize(): ?int
@@ -74,75 +50,6 @@ final class EncryptedStream implements StreamInterface
         }
 
         return $sourceSize + $paddingLength + StreamingEncryptor::TRUNCATED_MAC_LENGTH;
-    }
-
-    public function tell(): int
-    {
-        return $this->position;
-    }
-
-    public function eof(): bool
-    {
-        if ($this->outputBuffer !== '') {
-            return false;
-        }
-
-        if ($this->isCompleted) {
-            return true;
-        }
-
-        $this->fillOutputBuffer(1);
-
-        return $this->isCompleted && $this->outputBuffer === '';
-    }
-
-    public function isSeekable(): bool
-    {
-        return false;
-    }
-
-    public function seek(int $offset, int $whence = SEEK_SET): void
-    {
-        throw new StreamOperationException('EncryptedStream is not seekable.');
-    }
-
-    public function rewind(): void
-    {
-        throw new StreamOperationException('EncryptedStream cannot be rewound.');
-    }
-
-    public function isWritable(): bool
-    {
-        return false;
-    }
-
-    public function write(string $string): int
-    {
-        throw new StreamOperationException('EncryptedStream is read-only.');
-    }
-
-    public function isReadable(): bool
-    {
-        return true;
-    }
-
-    public function read(int $length): string
-    {
-        if ($length < 0) {
-            throw new StreamOperationException('Read length cannot be negative.');
-        }
-
-        if ($length === 0) {
-            return '';
-        }
-
-        $this->fillOutputBuffer($length);
-
-        $data               = substr($this->outputBuffer, 0, $length);
-        $this->outputBuffer = substr($this->outputBuffer, strlen($data));
-        $this->position     += strlen($data);
-
-        return $data;
     }
 
     public function getContents(): string
@@ -170,7 +77,7 @@ final class EncryptedStream implements StreamInterface
         return $this->streamingEncryptor->getSidecar();
     }
 
-    private function fillOutputBuffer(int $targetLength): void
+    protected function fillOutputBuffer(int $targetLength): void
     {
         while (strlen($this->outputBuffer) < $targetLength && !$this->isCompleted) {
             $plaintext = $this->stream->read($this->sourceReadSize);
