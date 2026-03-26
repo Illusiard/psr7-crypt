@@ -133,6 +133,8 @@ if ($encryptedStream->hasSidecar() && $encryptedStream->isSidecarReady()) {
 ## Структура пакета
 
 ```text
+task/
+  samples/
 src/
   Enum/
   Exception/
@@ -142,7 +144,21 @@ src/
 tests/
   Unit/
   Integration/
+  Samples/
 ```
+
+## Sample-файлы
+
+Для проверки библиотеки используются sample-файлы из папки `task/samples`.
+
+Ожидаемые типы файлов:
+
+- `*.original`
+- `*.encrypted`
+- `*.key`
+- `*.sidecar`
+
+Если добавляются новые sample-сценарии, их нужно класть именно в `task/samples`, чтобы они могли использоваться в автоматических тестах без хардкода содержимого в коде.
 
 ## Разработка
 
@@ -157,3 +173,11 @@ composer install
 ```bash
 composer test
 ```
+
+Отдельно в набор входят sample-тесты из `tests/Samples`, которые:
+
+- читают sample-файлы напрямую из файловой системы
+- побайтно проверяют encrypt/decrypt roundtrip against fixtures
+- проверяют sidecar для доступных streamable sample-файлов
+- прогоняют сценарии полного и частичного чтения
+- покрывают негативные случаи с повреждённым ciphertext и MAC
