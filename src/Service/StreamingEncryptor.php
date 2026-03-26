@@ -87,7 +87,7 @@ final class StreamingEncryptor
 
     public function isSidecarReady(): bool
     {
-        return (bool)$this->sidecarAccumulator;
+        return $this->sidecarAccumulator !== null && $this->sidecarAccumulator->isFinalized;
     }
 
     public function getSidecar(): ?Sidecar
