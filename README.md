@@ -40,6 +40,13 @@ composer require illusiard/psr7-crypt
 
 Для `Video` и `Audio` можно генерировать sidecar.
 
+Формула sidecar в библиотеке выражена явно:
+
+- sidecar строится по входной последовательности `IV + ciphertext + final truncated MAC`
+- последовательность режется окнами вида `[n*64K, (n+1)*64K+16]`
+- для каждого окна считается `HMAC-SHA256`, после чего берутся первые 10 байт
+- итоговый `Sidecar` это конкатенация всех таких 10-байтных подписей
+
 ## Пример шифрования
 
 ```php
@@ -109,10 +116,18 @@ if ($encryptedStream->hasSidecar() && $encryptedStream->isSidecarReady()) {
 }
 ```
 
+Внутри sidecar-цепочка собирается явно из трёх частей:
+
+- initialization vector
+- ciphertext
+- final truncated MAC
+
+Это важно для совместимости с sample sidecar и для предсказуемого поведения API.
+
 ## Ограничения текущей версии
 
 - `EncryptedStream` и `DecryptedStream` являются read-only и не поддерживают `seek()`/`rewind()`
-- `DecryptedStream` сначала валидирует весь encrypted payload, и только потом отдаёт plaintext
+- `DecryptedStream` работает потоково, но удерживает последний block и хвост `MAC` до финальной проверки целостности
 - `refKey` вычисляется как часть expanded key, но не используется
 
 ## Структура пакета
