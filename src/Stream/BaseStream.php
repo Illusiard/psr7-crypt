@@ -3,7 +3,6 @@
 namespace Illusiard\Psr7Crypt\Stream;
 
 use Illusiard\Psr7Crypt\Exception\StreamOperationException;
-use Illusiard\Psr7Crypt\ValueObject\ExpandedMediaKey;
 use Psr\Http\Message\StreamInterface;
 use Throwable;
 
@@ -17,7 +16,6 @@ abstract class BaseStream implements StreamInterface
 
     public function __construct(
         StreamInterface        $stream,
-        ExpandedMediaKey       $expandedMediaKey,
         protected readonly int $sourceReadSize = 8192
     )
     {
@@ -72,12 +70,12 @@ abstract class BaseStream implements StreamInterface
 
     public function seek(int $offset, int $whence = SEEK_SET): void
     {
-        throw new StreamOperationException(basename(__CLASS__) . ' is not seekable.');
+        throw new StreamOperationException($this->getStreamClassName() . ' is not seekable.');
     }
 
     public function rewind(): void
     {
-        throw new StreamOperationException(basename(__CLASS__) . ' cannot be rewound.');
+        throw new StreamOperationException($this->getStreamClassName() . ' cannot be rewound.');
     }
 
     public function isWritable(): bool
@@ -87,7 +85,7 @@ abstract class BaseStream implements StreamInterface
 
     public function write(string $string): int
     {
-        throw new StreamOperationException(basename(__CLASS__) . ' is read-only.');
+        throw new StreamOperationException($this->getStreamClassName() . ' is read-only.');
     }
 
     public function isReadable(): bool
@@ -112,5 +110,10 @@ abstract class BaseStream implements StreamInterface
         $this->position     += strlen($data);
 
         return $data;
+    }
+
+    protected function getStreamClassName(): string
+    {
+        return basename(str_replace('\\', '/', static::class));
     }
 }

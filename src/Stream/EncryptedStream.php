@@ -3,7 +3,6 @@
 namespace Illusiard\Psr7Crypt\Stream;
 
 use GuzzleHttp\Psr7\Utils;
-use Illusiard\Psr7Crypt\Exception\StreamOperationException;
 use Illusiard\Psr7Crypt\Service\SidecarAccumulator;
 use Illusiard\Psr7Crypt\Service\StreamingEncryptor;
 use Illusiard\Psr7Crypt\ValueObject\ExpandedMediaKey;
@@ -21,7 +20,7 @@ final class EncryptedStream extends BaseStream
         int              $sourceReadSize = 8192
     )
     {
-        parent::__construct($stream, $expandedMediaKey, $sourceReadSize);
+        parent::__construct($stream, $sourceReadSize);
 
         $sidecarAccumulator = null;
 
@@ -76,10 +75,13 @@ final class EncryptedStream extends BaseStream
 
     protected function fillOutputBuffer(int $targetLength): void
     {
+        $hasRetriedEmptyRead = false;
+
         while (strlen($this->outputBuffer) < $targetLength && !$this->isCompleted) {
             $plaintext = $this->stream->read($this->sourceReadSize);
 
             if ($plaintext !== '') {
+                $hasRetriedEmptyRead = false;
                 $this->outputBuffer .= $this->streamingEncryptor->appendPlaintext($plaintext);
                 continue;
             }
@@ -87,6 +89,12 @@ final class EncryptedStream extends BaseStream
             if ($this->stream->eof()) {
                 $this->outputBuffer .= $this->streamingEncryptor->finalize();
                 $this->isCompleted  = true;
+                continue;
+            }
+
+            if (!$hasRetriedEmptyRead) {
+                $hasRetriedEmptyRead = true;
+                continue;
             }
 
             break;

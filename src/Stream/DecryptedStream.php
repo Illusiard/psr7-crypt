@@ -2,11 +2,9 @@
 
 namespace Illusiard\Psr7Crypt\Stream;
 
-use Illusiard\Psr7Crypt\Exception\StreamOperationException;
 use Illusiard\Psr7Crypt\Service\StreamingDecryptor;
 use Illusiard\Psr7Crypt\ValueObject\ExpandedMediaKey;
 use Psr\Http\Message\StreamInterface;
-use Throwable;
 
 final class DecryptedStream extends BaseStream
 {
@@ -18,7 +16,7 @@ final class DecryptedStream extends BaseStream
         int $sourceReadSize = 8192
     )
     {
-        parent::__construct($stream, $expandedMediaKey, $sourceReadSize);
+        parent::__construct($stream, $sourceReadSize);
 
         $this->streamingDecryptor = new StreamingDecryptor($expandedMediaKey);
     }
@@ -46,10 +44,13 @@ final class DecryptedStream extends BaseStream
 
     protected function fillOutputBuffer(int $targetLength): void
     {
+        $hasRetriedEmptyRead = false;
+
         while (strlen($this->outputBuffer) < $targetLength && !$this->isCompleted) {
             $encryptedChunk = $this->stream->read($this->sourceReadSize);
 
             if ($encryptedChunk !== '') {
+                $hasRetriedEmptyRead = false;
                 $this->outputBuffer .= $this->streamingDecryptor->appendEncryptedData($encryptedChunk);
                 continue;
             }
@@ -57,6 +58,12 @@ final class DecryptedStream extends BaseStream
             if ($this->stream->eof()) {
                 $this->outputBuffer .= $this->streamingDecryptor->finalize();
                 $this->isCompleted  = true;
+                continue;
+            }
+
+            if (!$hasRetriedEmptyRead) {
+                $hasRetriedEmptyRead = true;
+                continue;
             }
 
             break;
