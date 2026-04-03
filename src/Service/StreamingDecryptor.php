@@ -6,7 +6,6 @@ use HashContext;
 use Illusiard\Psr7Crypt\Exception\DecryptionException;
 use Illusiard\Psr7Crypt\Exception\InvalidEncryptedPayloadException;
 use Illusiard\Psr7Crypt\Exception\InvalidMacException;
-use Illusiard\Psr7Crypt\Exception\InvalidPaddingException;
 use Illusiard\Psr7Crypt\ValueObject\ExpandedMediaKey;
 
 final class StreamingDecryptor
@@ -80,14 +79,14 @@ final class StreamingDecryptor
             throw InvalidMacException::create();
         }
 
-        $decryptedFinalChunk = $this->decryptCiphertextChunkWithoutMacUpdate($ciphertext);
+        $decryptedFinalChunk = $this->decryptCiphertextChunkWithoutMacUpdate($ciphertext, true);
         $finalPlaintext      = $this->pendingPlaintext . $decryptedFinalChunk;
 
         $this->isFinalized      = true;
         $this->encryptedBuffer  = '';
         $this->pendingPlaintext = '';
 
-        return $this->removePadding($finalPlaintext);
+        return $finalPlaintext;
     }
 
     private function getProcessableCiphertextLength(): int
@@ -108,13 +107,13 @@ final class StreamingDecryptor
         return $this->decryptCiphertextChunkWithoutMacUpdate($ciphertext);
     }
 
-    private function decryptCiphertextChunkWithoutMacUpdate(string $ciphertext): string
+    private function decryptCiphertextChunkWithoutMacUpdate(string $ciphertext, bool $useOpenSslPadding = false): string
     {
         $plaintext = openssl_decrypt(
             $ciphertext,
             'aes-256-cbc',
             $this->expandedMediaKey->getCipherKey(),
-            OPENSSL_RAW_DATA | OPENSSL_ZERO_PADDING,
+            $useOpenSslPadding ? OPENSSL_RAW_DATA : OPENSSL_RAW_DATA | OPENSSL_ZERO_PADDING,
             $this->currentIv
         );
 
@@ -148,20 +147,4 @@ final class StreamingDecryptor
         return $releasedPlaintext;
     }
 
-    private function removePadding(string $plaintext): string
-    {
-        $paddingLength = ord(substr($plaintext, -1));
-
-        if ($paddingLength < 1 || $paddingLength > self::BLOCK_SIZE) {
-            throw InvalidPaddingException::create();
-        }
-
-        $padding = substr($plaintext, -$paddingLength);
-
-        if ($padding !== str_repeat(chr($paddingLength), $paddingLength)) {
-            throw InvalidPaddingException::create();
-        }
-
-        return substr($plaintext, 0, -$paddingLength);
-    }
 }

@@ -28,29 +28,12 @@ final readonly class KeyExpander
 
     private function deriveHkdfSha256(string $inputKeyMaterial, int $length, string $info): string
     {
-        $pseudoRandomKey = hash_hmac(
+        return hash_hkdf(
             'sha256',
             $inputKeyMaterial,
-            str_repeat("\0", 32),
-            true
+            $length,
+            $info,
+            str_repeat("\0", 32)
         );
-
-        $outputKeyMaterial = '';
-        $previousBlock     = '';
-        $blockIndex        = 1;
-
-        while (strlen($outputKeyMaterial) < $length) {
-            $previousBlock = hash_hmac(
-                'sha256',
-                $previousBlock . $info . chr($blockIndex),
-                $pseudoRandomKey,
-                true
-            );
-
-            $outputKeyMaterial .= $previousBlock;
-            $blockIndex++;
-        }
-
-        return substr($outputKeyMaterial, 0, $length);
     }
 }

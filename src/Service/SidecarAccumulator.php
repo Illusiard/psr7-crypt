@@ -2,6 +2,7 @@
 
 namespace Illusiard\Psr7Crypt\Service;
 
+use HashContext;
 use Illusiard\Psr7Crypt\Exception\SidecarNotReadyException;
 use Illusiard\Psr7Crypt\ValueObject\Sidecar;
 
@@ -11,21 +12,26 @@ final class SidecarAccumulator
     public const int OVERLAP_SIZE         = 16;
     public const int TRUNCATED_MAC_LENGTH = 10;
 
-    private string $buffer;
+    private HashContext $chunkContext;
+
+    private int $chunkBytesHashed = 0;
+
+    private string $nextChunkPrefix = '';
 
     private string $sidecar = '';
 
-    public bool $isFinalized = false {
-        get {
-            return $this->isFinalized;
+    public bool $isFinalized
+        = false {
+            get {
+                return $this->isFinalized;
+            }
         }
-    }
 
     public function __construct(
         private readonly string $macKey
     )
     {
-        $this->buffer = '';
+        $this->chunkContext = $this->createChunkContext();
     }
 
     public function appendInitializationVector(string $initializationVector): void
@@ -49,9 +55,8 @@ final class SidecarAccumulator
             return;
         }
 
-        if ($this->buffer !== '') {
-            $this->sidecar .= $this->createChunkSignature($this->buffer);
-            $this->buffer  = '';
+        if ($this->chunkBytesHashed > 0) {
+            $this->sidecar .= $this->finalizeCurrentChunk();
         }
 
         $this->isFinalized = true;
@@ -72,22 +77,62 @@ final class SidecarAccumulator
             return;
         }
 
-        $this->buffer .= $sidecarInput;
+        while ($sidecarInput !== '') {
+            $remainingBytes = self::CHUNK_SIZE + self::OVERLAP_SIZE - $this->chunkBytesHashed;
+            $chunkPart      = substr($sidecarInput, 0, $remainingBytes);
+            $partLength     = strlen($chunkPart);
 
-        while (strlen($this->buffer) >= self::CHUNK_SIZE + self::OVERLAP_SIZE) {
-            $chunk = substr($this->buffer, 0, self::CHUNK_SIZE + self::OVERLAP_SIZE);
+            hash_update($this->chunkContext, $chunkPart);
+            $this->captureNextChunkPrefix($chunkPart);
 
-            $this->sidecar .= $this->createChunkSignature($chunk);
-            $this->buffer  = substr($this->buffer, self::CHUNK_SIZE);
+            $this->chunkBytesHashed += $partLength;
+            $sidecarInput           = substr($sidecarInput, $partLength);
+
+            if ($this->chunkBytesHashed === self::CHUNK_SIZE + self::OVERLAP_SIZE) {
+                $this->sidecar .= $this->finalizeCurrentChunk();
+                $this->startNextChunk();
+            }
         }
     }
 
-    private function createChunkSignature(string $chunk): string
+    private function createChunkContext(): HashContext
+    {
+        return hash_init('sha256', HASH_HMAC, $this->macKey);
+    }
+
+    private function captureNextChunkPrefix(string $chunkPart): void
+    {
+        $prefixStartOffset = max(0, self::CHUNK_SIZE - $this->chunkBytesHashed);
+        $prefixEndOffset   = min(
+            strlen($chunkPart),
+            self::CHUNK_SIZE + self::OVERLAP_SIZE - $this->chunkBytesHashed
+        );
+
+        if ($prefixStartOffset >= $prefixEndOffset) {
+            return;
+        }
+
+        $this->nextChunkPrefix .= substr($chunkPart, $prefixStartOffset, $prefixEndOffset - $prefixStartOffset);
+    }
+
+    private function finalizeCurrentChunk(): string
     {
         return substr(
-            hash_hmac('sha256', $chunk, $this->macKey, true),
+            hash_final($this->chunkContext, true),
             0,
             self::TRUNCATED_MAC_LENGTH
         );
+    }
+
+    private function startNextChunk(): void
+    {
+        $this->chunkContext     = $this->createChunkContext();
+        $this->chunkBytesHashed = strlen($this->nextChunkPrefix);
+
+        if ($this->nextChunkPrefix !== '') {
+            hash_update($this->chunkContext, $this->nextChunkPrefix);
+        }
+
+        $this->nextChunkPrefix = '';
     }
 }
